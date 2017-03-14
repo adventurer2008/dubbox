@@ -22,16 +22,16 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import com.alibaba.dubbo.common.Constants;
 import com.alibaba.dubbo.common.URL;
-import com.alibaba.dubbo.common.extension.ExtensionLoader;
 import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.logger.LoggerFactory;
-import com.alibaba.dubbo.common.store.DataStore;
 import com.alibaba.dubbo.common.utils.ExecutorUtil;
 import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.remoting.Channel;
 import com.alibaba.dubbo.remoting.ChannelHandler;
 import com.alibaba.dubbo.remoting.RemotingException;
 import com.alibaba.dubbo.remoting.Server;
+import com.alibaba.dubbo.remoting.transport.dispatcher.WrappedChannelHandler;
+import sun.net.util.IPAddressUtil;
 
 /**
  * AbstractServer
@@ -61,6 +61,10 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         String host = url.getParameter(Constants.ANYHOST_KEY, false) 
                         || NetUtils.isInvalidLocalHost(getUrl().getHost()) 
                         ? NetUtils.ANYHOST : getUrl().getHost();
+        //如果存在hostname,将不检查hostname对应的ip地址,直接绑定所有地址
+        if (!IPAddressUtil.isIPv4LiteralAddress(getUrl().getHost())) {
+            host = NetUtils.ANYHOST;
+        }
         bindAddress = new InetSocketAddress(host, getUrl().getPort());
         this.accepts = url.getParameter(Constants.ACCEPTS_KEY, Constants.DEFAULT_ACCEPTS);
         this.idleTimeout = url.getParameter(Constants.IDLE_TIMEOUT_KEY, Constants.DEFAULT_IDLE_TIMEOUT);
@@ -73,9 +77,9 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
             throw new RemotingException(url.toInetSocketAddress(), null, "Failed to bind " + getClass().getSimpleName() 
                                         + " on " + getLocalAddress() + ", cause: " + t.getMessage(), t);
         }
-
-        executor = (ExecutorService) ExtensionLoader.getExtensionLoader(DataStore.class)
-                .getDefaultExtension().get(Constants.EXECUTOR_SERVICE_COMPONENT_KEY, Integer.toString(url.getPort()));
+        if (handler instanceof WrappedChannelHandler ){
+            executor = ((WrappedChannelHandler)handler).getExecutor();
+        }
     }
     
     protected abstract void doOpen() throws Throwable;
